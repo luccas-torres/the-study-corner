@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Calendar, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, Loader2, Clock } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { CommentSection } from '@/components/CommentSection';
 import { LatexRenderer } from '@/components/LatexRenderer';
@@ -15,6 +15,7 @@ interface Article {
   cover_image: string | null;
   published_at: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 interface Comment {
@@ -96,10 +97,22 @@ const ArticlePage = () => {
     locale: ptBR,
   });
 
+  const updatedDate = article.updated_at
+    ? format(new Date(article.updated_at), "d 'de' MMMM 'de' yyyy", {
+        locale: ptBR,
+      })
+    : null;
+
+  // Verifica se a data de atualização é diferente da data de publicação (ignora diferenças de horário no mesmo dia)
+  const wasUpdated =
+    article.updated_at &&
+    article.published_at &&
+    new Date(article.updated_at).toDateString() !== new Date(article.published_at).toDateString();
+
   return (
     <div className="min-h-screen bg-background">
       <Header showSearch={false} />
-      
+
       <main className="container mx-auto px-4 py-8">
         {/* Back link */}
         <Link
@@ -116,9 +129,19 @@ const ArticlePage = () => {
             <h1 className="font-serif text-4xl md:text-5xl font-bold text-foreground mb-4 leading-tight">
               {article.title}
             </h1>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              <time>{formattedDate}</time>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-muted-foreground text-sm">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                <time>Publicado em {formattedDate}</time>
+              </div>
+              
+              {wasUpdated && (
+                <div className="flex items-center gap-2 text-primary/80" title="Conteúdo atualizado recentemente">
+                  <Clock className="h-4 w-4" />
+                  <time>Atualizado em {updatedDate}</time>
+                </div>
+              )}
             </div>
           </header>
 

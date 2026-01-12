@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import katex from 'katex';
+import renderMathInElement from 'katex/dist/contrib/auto-render';
+import 'katex/dist/katex.min.css';
 
 interface LatexRendererProps {
   content: string;
@@ -9,43 +11,28 @@ export function LatexRenderer({ content }: LatexRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (containerRef.current) {
+      // 1. Injeta o HTML bruto (texto do artigo)
+      containerRef.current.innerHTML = content;
 
-    // Process the content to render LaTeX
-    let processedContent = content;
-
-    // Handle display math ($$...$$)
-    processedContent = processedContent.replace(
-      /\$\$([^$]+)\$\$/g,
-      (_, latex) => {
-        try {
-          return `<div class="katex-display">${katex.renderToString(latex, {
-            displayMode: true,
-            throwOnError: false,
-          })}</div>`;
-        } catch (e) {
-          return `<code class="text-destructive">${latex}</code>`;
-        }
-      }
-    );
-
-    // Handle inline math ($...$)
-    processedContent = processedContent.replace(
-      /\$([^$]+)\$/g,
-      (_, latex) => {
-        try {
-          return katex.renderToString(latex, {
-            displayMode: false,
-            throwOnError: false,
-          });
-        } catch (e) {
-          return `<code class="text-destructive">${latex}</code>`;
-        }
-      }
-    );
-
-    containerRef.current.innerHTML = processedContent;
+      // 2. Procura padrões LaTeX e renderiza
+      renderMathInElement(containerRef.current, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true }, // Bloco (centro)
+          { left: '$', right: '$', display: false },  // Inline (no texto)
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\]', display: true }
+        ],
+        throwOnError: false, // Não quebra a página se houver erro na fórmula
+        errorColor: '#cc0000',
+      });
+    }
   }, [content]);
 
-  return <div ref={containerRef} className="prose max-w-none" />;
+  return (
+    <div 
+      ref={containerRef}
+      className="latex-content [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden"
+    />
+  );
 }

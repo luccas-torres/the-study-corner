@@ -8,7 +8,7 @@ import {
   ListOrdered,
   Quote,
   Code,
-  Image,
+  Image as ImageIcon,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -19,6 +19,7 @@ import {
   Undo,
   Redo,
   Smile,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -27,7 +28,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -38,19 +41,60 @@ const EMOJIS = ['😀', '😂', '🤔', '👍', '👎', '❤️', '🔥', '✨',
 export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showLatexInput, setShowLatexInput] = useState(false);
   const [latexInput, setLatexInput] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   if (!editor) return null;
 
-  const addImage = () => {
-    const url = window.prompt('URL da imagem:');
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run();
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('blog-images')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('blog-images')
+        .getPublicUrl(filePath);
+
+      if (data.publicUrl) {
+        editor.chain().focus().setImage({ src: data.publicUrl }).run();
+      }
+    } catch (error) {
+      console.error('Erro ao fazer upload:', error);
+      toast({
+        title: 'Erro no upload',
+        description: 'Não foi possível carregar a imagem.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+      // Limpa o input para permitir selecionar o mesmo arquivo novamente se necessário
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
   const insertLatex = () => {
     if (latexInput.trim()) {
-      // Insert LaTeX as a custom node or formatted text
       editor.chain().focus().insertContent(`$$${latexInput}$$`).run();
       setLatexInput('');
       setShowLatexInput(false);
@@ -66,11 +110,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     isActive,
     children,
     title,
+    disabled = false,
   }: {
     onClick: () => void;
     isActive?: boolean;
     children: React.ReactNode;
     title: string;
+    disabled?: boolean;
   }) => (
     <Button
       type="button"
@@ -79,6 +125,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       className={`h-8 w-8 ${isActive ? 'bg-muted text-primary' : ''}`}
       onClick={onClick}
       title={title}
+      disabled={disabled}
     >
       {children}
     </Button>
@@ -86,6 +133,15 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
   return (
     <div className="border-b border-border p-2 flex flex-wrap gap-1 items-center bg-card sticky top-0 z-10">
+      {/* Input oculto para upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="image/*"
+      />
+
       {/* Undo/Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}
@@ -223,9 +279,17 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Image */}
-      <ToolbarButton onClick={addImage} title="Inserir imagem">
-        <Image className="h-4 w-4" />
+      {/* Image Upload Button */}
+      <ToolbarButton 
+        onClick={handleImageClick} 
+        title="Inserir imagem"
+        disabled={uploading}
+      >
+        {uploading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <ImageIcon className="h-4 w-4" />
+        )}
       </ToolbarButton>
 
       {/* Emoji */}
