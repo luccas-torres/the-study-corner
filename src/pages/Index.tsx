@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ArticleCard } from '@/components/ArticleCard';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, BookOpen } from 'lucide-react';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 interface Article {
   id: string;
@@ -12,75 +21,153 @@ interface Article {
   cover_image: string | null;
   published_at: string | null;
   created_at: string;
+  tags: string[] | null;
 }
 
+const ITEMS_PER_PAGE = 6;
+
 const Index = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = parseInt(searchParams.get('page') || '1');
+  
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     fetchArticles();
-  }, []);
+  }, [page, searchQuery]);
 
   const fetchArticles = async () => {
-    const { data, error } = await supabase
+    setLoading(true);
+    const from = (page - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    // Seleciona as colunas, incluindo tags
+    let query = supabase
       .from('articles')
-      .select('id, slug, title, excerpt, cover_image, published_at, created_at')
+      .select('id, slug, title, excerpt, cover_image, published_at, created_at, tags', { count: 'exact' })
       .eq('published', true)
-      .order('published_at', { ascending: false });
+      .order('published_at', { ascending: false })
+      .range(from, to);
+
+    // Lógica de Busca: Título OU Resumo OU Tags
+    if (searchQuery) {
+      // tags.cs.{"termo"} verifica se o array de tags CONTÉM o termo exato
+      // title.ilike.%termo% verifica se o título CONTÉM o texto (parcial)
+      query = query.or(`title.ilike.%${searchQuery}%,excerpt.ilike.%${searchQuery}%,tags.cs.{${searchQuery}}`);
+    }
+
+    const { data, count, error } = await query;
 
     if (!error && data) {
       setArticles(data);
+      setTotalCount(count || 0);
     }
     setLoading(false);
   };
 
-  const filteredArticles = articles.filter((article) =>
-    article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (article.excerpt && article.excerpt.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setSearchParams({ page: newPage.toString() });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (query !== searchQuery) {
+      setSearchParams({ page: '1' });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onSearch={setSearchQuery} />
+      <Header onSearch={handleSearch} />
       
       <main className="container mx-auto px-4 py-12">
-        {/* Hero section */}
         <section className="text-center mb-16 animate-fade-in">
           <h1 className="font-serif text-4xl md:text-5xl font-bold text-foreground mb-4">
             Caderno de Estudos
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Resumos, anotações e reflexões sobre temas diversos. Um espaço para compartilhar conhecimento e aprendizados.
+            Resumos, anotações e reflexões.
           </p>
         </section>
 
-        {/* Articles grid */}
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : filteredArticles.length > 0 ? (
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {filteredArticles.map((article, index) => (
-              <div
-                key={article.id}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <ArticleCard
-                  id={article.id}
-                  slug={article.slug}
-                  title={article.title}
-                  excerpt={article.excerpt || undefined}
-                  coverImage={article.cover_image || undefined}
-                  publishedAt={article.published_at || undefined}
-                  createdAt={article.created_at}
-                />
-              </div>
-            ))}
-          </div>
+        ) : articles.length > 0 ? (
+          <>
+            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 mb-12">
+              {articles.map((article, index) => (
+                <div
+                  key={article.id}
+                  className="animate-fade-in"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <ArticleCard
+                    id={article.id}
+                    slug={article.slug}
+                    title={article.title}
+                    excerpt={article.excerpt || undefined}
+                    coverImage={article.cover_image || undefined}
+                    publishedAt={article.published_at || undefined}
+                    createdAt={article.created_at}
+                    tags={article.tags}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => handlePageChange(page - 1)}
+                      className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                     if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink
+                            isActive={page === p}
+                            onClick={() => handlePageChange(p)}
+                            className="cursor-pointer"
+                          >
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    } else if (p === page - 2 || p === page + 2) {
+                      return (
+                        <PaginationItem key={p}>
+                          <span className="flex h-9 w-9 items-center justify-center">...</span>
+                        </PaginationItem>
+                      );
+                    }
+                    return null;
+                  })}
+
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => handlePageChange(page + 1)}
+                      className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </>
         ) : (
           <div className="text-center py-20">
             <BookOpen className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
@@ -95,11 +182,10 @@ const Index = () => {
           </div>
         )}
       </main>
-
-      {/* Footer */}
+      
       <footer className="border-t border-border py-8 mt-16">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Caderno de Estudos. Todos os direitos reservados.</p>
+          <p>© {new Date().getFullYear()} Caderno de Estudos.</p>
         </div>
       </footer>
     </div>

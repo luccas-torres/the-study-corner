@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Calendar, Loader2, Clock } from 'lucide-react';
+import { ArrowLeft, Calendar, Loader2, Clock, Tag } from 'lucide-react'; // Importei Tag
 import { Header } from '@/components/Header';
 import { CommentSection } from '@/components/CommentSection';
 import { LatexRenderer } from '@/components/LatexRenderer';
 import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge'; // Importe o Badge
 
 interface Article {
   id: string;
@@ -16,6 +17,7 @@ interface Article {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  tags: string[] | null; // Adicionado
 }
 
 interface Comment {
@@ -39,6 +41,7 @@ const ArticlePage = () => {
   }, [slug]);
 
   const fetchArticle = async () => {
+    // O select('*') já traz as tags se a coluna existir no banco
     const { data: articleData, error: articleError } = await supabase
       .from('articles')
       .select('*')
@@ -103,7 +106,6 @@ const ArticlePage = () => {
       })
     : null;
 
-  // Verifica se a data de atualização é diferente da data de publicação (ignora diferenças de horário no mesmo dia)
   const wasUpdated =
     article.updated_at &&
     article.published_at &&
@@ -114,7 +116,6 @@ const ArticlePage = () => {
       <Header showSearch={false} />
 
       <main className="container mx-auto px-4 py-8">
-        {/* Back link */}
         <Link
           to="/"
           className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
@@ -124,7 +125,6 @@ const ArticlePage = () => {
         </Link>
 
         <article className="max-w-3xl mx-auto animate-fade-in">
-          {/* Header */}
           <header className="mb-8">
             <h1 className="font-serif text-4xl md:text-5xl font-bold text-foreground mb-4 leading-tight">
               {article.title}
@@ -145,7 +145,6 @@ const ArticlePage = () => {
             </div>
           </header>
 
-          {/* Cover image */}
           {article.cover_image && (
             <figure className="mb-10">
               <img
@@ -156,12 +155,27 @@ const ArticlePage = () => {
             </figure>
           )}
 
-          {/* Content */}
-          <div className="prose max-w-none">
+          <div className="prose max-w-none mb-8">
             <LatexRenderer content={article.content} />
           </div>
 
-          {/* Comments */}
+          {/* Seção de Tags ao final do artigo */}
+          {article.tags && article.tags.length > 0 && (
+            <div className="border-t border-border pt-6 mb-10">
+              <div className="flex items-center gap-2 mb-3 text-muted-foreground">
+                <Tag className="h-4 w-4" />
+                <span className="text-sm font-medium">Tags:</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {article.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-sm px-3 py-1">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           <CommentSection
             articleId={article.id}
             comments={comments}
@@ -170,7 +184,6 @@ const ArticlePage = () => {
         </article>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border py-8 mt-16">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           <p>© {new Date().getFullYear()} Caderno de Estudos. Todos os direitos reservados.</p>

@@ -1,56 +1,45 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Image from '@tiptap/extension-image';
-import TextAlign from '@tiptap/extension-text-align';
-import Underline from '@tiptap/extension-underline';
-import Placeholder from '@tiptap/extension-placeholder';
 import { EditorToolbar } from './EditorToolbar';
-import { useEffect } from 'react';
+import { common, createLowlight } from 'lowlight';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+
+// Cria a instância do lowlight com as linguagens comuns (JS, HTML, CSS, Python, etc)
+const lowlight = createLowlight(common);
 
 interface RichTextEditorProps {
   content: string;
   onChange: (content: string) => void;
-  placeholder?: string;
 }
 
-export function RichTextEditor({ content, onChange, placeholder = 'Comece a escrever seu artigo...' }: RichTextEditorProps) {
+export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3],
-        },
+        // Desativamos o codeBlock padrão para usar o Lowlight no lugar
+        codeBlock: false,
       }),
-      Image.configure({
-        HTMLAttributes: {
-          class: 'max-w-full h-auto rounded-lg',
-        },
-      }),
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
-      }),
-      Underline,
-      Placeholder.configure({
-        placeholder,
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: 'javascript',
       }),
     ],
     content,
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm sm:prose-base lg:prose-lg xl:prose-2xl m-5 focus:outline-none max-w-none',
+      },
+    },
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
   });
 
-  useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
-    }
-  }, [content, editor]);
-
   return (
-    <div className="border border-border rounded-lg overflow-hidden bg-card">
+    <div className="border border-input rounded-lg overflow-hidden bg-background">
       <EditorToolbar editor={editor} />
-      <div className="p-4 min-h-[400px]">
-        <EditorContent editor={editor} className="tiptap" />
+      <div className="p-4 min-h-[200px]">
+        <EditorContent editor={editor} />
       </div>
     </div>
   );
