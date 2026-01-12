@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'; // useLocation adicionado
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import Cropper from 'react-easy-crop'; // Importe o Cropper
-import { getCroppedImg } from '@/lib/cropUtils'; // Importe a função que criamos
+import Cropper from 'react-easy-crop';
+import { getCroppedImg } from '@/lib/cropUtils';
 import {
   Plus,
   Edit,
@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider'; // Importe o Slider
+import { Slider } from '@/components/ui/slider';
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,7 @@ interface Article {
 const Admin = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // Hook para ler o estado vindo do Header
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
 
@@ -136,22 +137,37 @@ const Admin = () => {
     setIsEditorOpen(true);
   };
 
+  // Efeito para abrir o editor automaticamente se vier do Header ou URL
   useEffect(() => {
-    const editSlug = searchParams.get('edit');
+    // Verifica tanto query params (?edit=...) quanto state ({ editSlug: ... })
+    const editSlug = searchParams.get('edit') || (location.state as any)?.editSlug;
+    
     if (editSlug && articles.length > 0 && !isEditorOpen) {
       const articleToEdit = articles.find((a) => a.slug === editSlug);
       if (articleToEdit) {
         openEditor(articleToEdit);
+        // Limpa o state para evitar reabrir ao dar refresh, mas mantém a URL limpa visualmente se desejar
+        // window.history.replaceState({}, document.title); 
       }
     }
-  }, [articles, searchParams, isEditorOpen]);
+  }, [articles, searchParams, location.state, isEditorOpen]);
 
   const closeEditor = () => {
+    // Verifica se existe um caminho de retorno no estado (vindo do Header)
+    const state = location.state as { returnTo?: string } | null;
+    
+    if (state?.returnTo) {
+      navigate(state.returnTo);
+      return;
+    }
+
+    // Fallback para comportamento antigo (query param)
     const editSlug = searchParams.get('edit');
     if (editSlug) {
       navigate(`/artigo/${editSlug}`);
       return;
     }
+
     setSearchParams({});
     setIsEditorOpen(false);
     setEditingArticle(null);
@@ -175,7 +191,6 @@ const Admin = () => {
         setCrop({ x: 0, y: 0 });
       });
       reader.readAsDataURL(file);
-      // Limpa o input para permitir selecionar o mesmo arquivo novamente se cancelar
       e.target.value = '';
     }
   };
@@ -191,7 +206,6 @@ const Admin = () => {
 
     setUploadingCover(true);
     try {
-      // Gera o blob da imagem recortada
       const croppedImageBlob = await getCroppedImg(
         tempImgUrl,
         croppedAreaPixels,
@@ -200,10 +214,8 @@ const Admin = () => {
 
       if (!croppedImageBlob) throw new Error('Falha ao gerar imagem');
 
-      // Nome único para o arquivo
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpeg`;
 
-      // Upload para o Supabase
       const { error: uploadError } = await supabase.storage
         .from('covers')
         .upload(fileName, croppedImageBlob, {
@@ -212,11 +224,9 @@ const Admin = () => {
 
       if (uploadError) throw uploadError;
 
-      // Pegar URL pública
       const { data } = supabase.storage.from('covers').getPublicUrl(fileName);
       setCoverImage(data.publicUrl);
 
-      // Fechar modal de crop
       setIsCropperOpen(false);
       setTempImgUrl(null);
 
@@ -303,7 +313,12 @@ const Admin = () => {
       description: editingArticle ? 'Artigo atualizado!' : 'Artigo criado!',
     });
 
-    if (searchParams.get('edit')) {
+    // Lógica de redirecionamento após salvar
+    const state = location.state as { returnTo?: string; editSlug?: string } | null;
+    
+    // Se estávamos editando (seja por URL ou State), vamos para o artigo
+    if (searchParams.get('edit') || state?.editSlug) {
+      // Usa o novo slug (caso o título tenha mudado)
       navigate(`/artigo/${articleData.slug}`);
     } else {
       closeEditor();

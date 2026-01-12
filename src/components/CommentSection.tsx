@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageCircle, User, Trash2 } from 'lucide-react';
+import { MessageCircle, User, Trash2, Clock } from 'lucide-react'; // Adicionado Clock
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
+import ReCAPTCHA from "react-google-recaptcha"; // Adicionado ReCAPTCHA
 
 interface Comment {
   id: string;
@@ -25,17 +26,44 @@ interface CommentSectionProps {
 }
 
 export function CommentSection({ articleId, comments, onCommentAdded }: CommentSectionProps) {
+  // Estados do Design Original
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [content, setContent] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Estados de Proteção (Novos)
+  const [cooldown, setCooldown] = useState(0);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<ReCAPTCHA>(null);
+  
   const { toast } = useToast();
   const { user } = useAuth();
+  const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+
+  // Lógica de Cooldown (Anti-Flood)
+  useEffect(() => {
+    const lastCommentTime = localStorage.getItem(`last_comment_${articleId}`);
+    if (lastCommentTime) {
+      const secondsPassed = (Date.now() - parseInt(lastCommentTime)) / 1000;
+      if (secondsPassed < 60) {
+        setCooldown(Math.ceil(60 - secondsPassed));
+      }
+    }
+  }, [articleId]);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
+      return () => clearInterval(timer);
+    }
+  }, [cooldown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // 1. Validações
     if (!content.trim()) {
       toast({
         title: 'Erro',
@@ -45,8 +73,29 @@ export function CommentSection({ articleId, comments, onCommentAdded }: CommentS
       return;
     }
 
+    // Validação do Robô
+    if (!captchaToken) {
+      toast({
+        title: "Verificação necessária",
+        description: "Confirme que você não é um robô.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validação de Flood
+    if (cooldown > 0) {
+      toast({
+        title: "Aguarde um momento",
+        description: `Você poderá comentar novamente em ${cooldown} segundos.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
+    // 2. Envio (Payload Original)
     const { error } = await supabase
       .from('comments')
       .insert({
@@ -68,6 +117,11 @@ export function CommentSection({ articleId, comments, onCommentAdded }: CommentS
       return;
     }
 
+    // 3. Sucesso e Limpeza
+    const now = Date.now();
+    localStorage.setItem(`last_comment_${articleId}`, now.toString());
+    setCooldown(60); // Ativa cooldown de 1 min
+
     toast({
       title: 'Sucesso',
       description: 'Comentário enviado com sucesso!',
@@ -77,6 +131,8 @@ export function CommentSection({ articleId, comments, onCommentAdded }: CommentS
     setEmail('');
     setContent('');
     setIsAnonymous(false);
+    setCaptchaToken(null);
+    captchaRef.current?.reset(); // Reseta o checkbox
     onCommentAdded();
   };
 
@@ -109,7 +165,7 @@ export function CommentSection({ articleId, comments, onCommentAdded }: CommentS
         Comentários ({comments.length})
       </h3>
 
-      {/* Comment form */}
+      {/* Formulário (Layout Original preservado) */}
       <form onSubmit={handleSubmit} className="bg-muted/30 rounded-lg p-6 mb-8">
         <h4 className="font-medium mb-4">Deixe seu comentário</h4>
         
@@ -148,13 +204,35 @@ export function CommentSection({ articleId, comments, onCommentAdded }: CommentS
             rows={4}
           />
 
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Enviando...' : 'Enviar comentário'}
+          {/* ReCAPTCHA Inserido discretamente aqui */}
+          {siteKey && (
+            <div className="py-2">
+              <ReCAPTCHA
+                ref={captchaRef}
+                sitekey={siteKey}
+                onChange={setCaptchaToken}
+                theme="light"
+              />
+            </div>
+          )}
+
+          {/* Botão com lógica de Cooldown */}
+          <Button type="submit" disabled={isSubmitting || cooldown > 0}>
+            {isSubmitting ? (
+              'Enviando...'
+            ) : cooldown > 0 ? (
+              <>
+                <Clock className="mr-2 h-4 w-4 animate-pulse" />
+                Aguarde {cooldown}s
+              </>
+            ) : (
+              'Enviar comentário'
+            )}
           </Button>
         </div>
       </form>
 
-      {/* Comments list */}
+      {/* Lista de Comentários (Layout Original preservado) */}
       <div className="space-y-6">
         {comments.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">

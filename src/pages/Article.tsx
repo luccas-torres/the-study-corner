@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Calendar, Loader2, Clock, Tag } from 'lucide-react'; // Importei Tag
+import { ArrowLeft, Calendar, Loader2, Clock, Tag, User } from 'lucide-react'; 
 import { Header } from '@/components/Header';
 import { CommentSection } from '@/components/CommentSection';
 import { LatexRenderer } from '@/components/LatexRenderer';
@@ -131,9 +131,16 @@ const ArticlePage = () => {
             </h1>
             
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-muted-foreground text-sm">
+              {/* Adicionado Autor */}
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span>Publicado por Luccas Torres</span>
+              </div>
+
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                <time>Publicado em {formattedDate}</time>
+                {/* Texto ajustado para não ficar repetitivo */}
+                <time>em {formattedDate}</time>
               </div>
               
               {wasUpdated && (
