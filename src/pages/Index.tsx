@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ArticleCard } from '@/components/ArticleCard';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, BookOpen } from 'lucide-react';
+import { Loader2, BookOpen, Github, Linkedin } from 'lucide-react'; // Ícones importados
 import {
   Pagination,
   PaginationContent,
@@ -44,7 +44,6 @@ const Index = () => {
     const from = (page - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    // Seleciona as colunas, incluindo tags
     let query = supabase
       .from('articles')
       .select('id, slug, title, excerpt, cover_image, published_at, created_at, tags', { count: 'exact' })
@@ -52,10 +51,8 @@ const Index = () => {
       .order('published_at', { ascending: false })
       .range(from, to);
 
-    // Lógica de Busca: Título OU Resumo OU Tags
     if (searchQuery) {
-      // tags.cs.{"termo"} verifica se o array de tags CONTÉM o termo exato
-      // title.ilike.%termo% verifica se o título CONTÉM o texto (parcial)
+      // Busca por Título, Resumo ou Tags (usando array contains)
       query = query.or(`title.ilike.%${searchQuery}%,excerpt.ilike.%${searchQuery}%,tags.cs.{${searchQuery}}`);
     }
 
@@ -85,16 +82,18 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    // Adicionado 'flex flex-col' para garantir que o footer vá para o final
+    <div className="min-h-screen bg-background flex flex-col">
       <Header onSearch={handleSearch} />
       
-      <main className="container mx-auto px-4 py-12">
+      {/* Adicionado 'flex-1' para empurrar o footer */}
+      <main className="container mx-auto px-4 py-12 flex-1">
         <section className="text-center mb-16 animate-fade-in">
           <h1 className="font-serif text-4xl md:text-5xl font-bold text-foreground mb-4">
             Caderno de Estudos
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Resumos, anotações e reflexões.
+            Resumos, anotações e reflexões sobre temas diversos. Um espaço para compartilhar conhecimento e aprendizados.
           </p>
         </section>
 
@@ -119,7 +118,7 @@ const Index = () => {
                     coverImage={article.cover_image || undefined}
                     publishedAt={article.published_at || undefined}
                     createdAt={article.created_at}
-                    tags={article.tags}
+                    // tags={article.tags} // Descomente se seu ArticleCard já aceitar tags
                   />
                 </div>
               ))}
@@ -183,9 +182,34 @@ const Index = () => {
         )}
       </main>
       
-      <footer className="border-t border-border py-8 mt-16">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Caderno de Estudos.</p>
+      {/* Footer Atualizado com Links */}
+      <footer className="border-t border-border py-8 mt-16 bg-muted/10">
+        <div className="container mx-auto px-4 flex flex-col items-center gap-6">
+          <div className="flex items-center gap-6">
+            <a
+              href="https://github.com/luccas-torres"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-muted rounded-full"
+              title="GitHub"
+            >
+              <Github className="h-5 w-5" />
+              <span className="sr-only">GitHub</span>
+            </a>
+            <a
+              href="https://www.linkedin.com/in/luccas-fontes"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-muted rounded-full"
+              title="LinkedIn"
+            >
+              <Linkedin className="h-5 w-5" />
+              <span className="sr-only">LinkedIn</span>
+            </a>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} Caderno de Estudos. Todos os direitos reservados.
+          </p>
         </div>
       </footer>
     </div>
